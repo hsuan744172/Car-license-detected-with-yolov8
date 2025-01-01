@@ -37,28 +37,40 @@ def process_image(image_path):
         
         # 保存標籤文件並截取車牌
         if r.boxes:
-            with open(f'labels/{file_name}.txt', 'w') as f:
-                for box in r.boxes:
-                    # 轉換為YOLO格式
-                    x_center = box.xywhn[0][0].item()
-                    y_center = box.xywhn[0][1].item()
-                    width = box.xywhn[0][2].item()
-                    height = box.xywhn[0][3].item()
-                    class_id = box.cls[0].item()
-                    f.write(f"{int(class_id)} {x_center} {y_center} {width} {height}\n")
-                    
-                    # 計算車牌在原圖中的像素座標
-                    x = int((x_center - width/2) * w)
-                    y = int((y_center - height/2) * h)
-                    plate_w = int(width * w)
-                    plate_h = int(height * h)
-                    
-                    # 截取車牌區域
-                    plate = img[y:y+plate_h, x:x+plate_w]
-                    if plate.size > 0:
-                        # 保存車牌圖片
-                        cv2.imwrite(f'board/{file_name}.jpg', plate)
+            # 找到信心分數最高的車牌
+            best_box = None
+            highest_conf = -1
             
+            for box in r.boxes:
+                conf = box.conf[0].item()  # 獲取信心分數
+                if conf > highest_conf:
+                    highest_conf = conf
+                    best_box = box
+            
+            # 只處理信心分數最高的車牌
+            if best_box:
+                # 轉換為YOLO格式
+                x_center = best_box.xywhn[0][0].item()
+                y_center = best_box.xywhn[0][1].item()
+                width = best_box.xywhn[0][2].item()
+                height = best_box.xywhn[0][3].item()
+                class_id = best_box.cls[0].item()
+                
+                with open(f'labels/{file_name}.txt', 'w') as f:
+                    f.write(f"{int(class_id)} {x_center} {y_center} {width} {height}\n")
+                
+                # 計算車牌在原圖中的像素座標
+                x = int((x_center - width/2) * w)
+                y = int((y_center - height/2) * h)
+                plate_w = int(width * w)
+                plate_h = int(height * h)
+                
+                # 截取車牌區域
+                plate = img[y:y+plate_h, x:x+plate_w]
+                if plate.size > 0:
+                    cv2.imwrite(f'board/{file_name}.jpg', plate)
+                    print(f"最高信心分數車牌 (信心分數: {highest_conf:.2f})")
+
             # 處理截取的車牌圖片
             plate_path = f'board/{file_name}.jpg'
             warped_path, M, rect, top_crop = process_license_plate(plate_path)
@@ -146,7 +158,7 @@ def main():
     with open(output_file, 'w') as f:
         f.write("")
 
-    folder_path = 'sample 2024'
+    folder_path = '2023_TestData'
     image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
     image_files.sort()
 
